@@ -17,6 +17,7 @@ option(CUTTER_ENABLE_CRASH_REPORTS "Enable crash report system. Unused if CUTTER
 tri_option(CUTTER_ENABLE_KSYNTAXHIGHLIGHTING "Use KSyntaxHighlighting" AUTO)
 tri_option(CUTTER_ENABLE_GRAPHVIZ "Enable use of graphviz for graph layout" AUTO)
 option (option SHIBOKEN_EXTRA_OPTIONS "Extra options for shiboken generator")
+option(CUTTER_ENABLE_TESTS "Build QtTest tests" OFF)
 
 if(NOT CUTTER_ENABLE_PYTHON)
     set(CUTTER_ENABLE_PYTHON_BINDINGS OFF)
@@ -36,7 +37,6 @@ set(QRC_FILES ${CUTTER_PRO_RESOURCES})
 set(CUTTER_VERSION_MAJOR "${CUTTER_PRO_CUTTER_VERSION_MAJOR}")
 set(CUTTER_VERSION_MINOR "${CUTTER_PRO_CUTTER_VERSION_MINOR}")
 set(CUTTER_VERSION_PATCH "${CUTTER_PRO_CUTTER_VERSION_PATCH}")
-
 set(CUTTER_VERSION_FULL "${CUTTER_VERSION_MAJOR}.${CUTTER_VERSION_MINOR}.${CUTTER_VERSION_PATCH}")
 
 project(Cutter VERSION "${CUTTER_VERSION_FULL}")
@@ -220,3 +220,6 @@ if(TARGET KF5::SyntaxHighlighting)
     target_compile_definitions(Cutter PRIVATE CUTTER_ENABLE_KSYNTAXHIGHLIGHTING)
 endif()
 
+if(CUTTER_ENABLE_TESTS)
+    add_subdirectory(test)
+endif()
