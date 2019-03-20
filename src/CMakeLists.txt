@@ -43,8 +43,6 @@ project(Cutter VERSION "${CUTTER_VERSION_FULL}")
 
 set(CMAKE_CXX_STANDARD 11)
 
-include_directories(core widgets common plugins)
-
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
@@ -192,10 +190,13 @@ if(CUTTER_ENABLE_CRASH_REPORTS)
     endif()
 endif()
 
-target_link_libraries(Cutter Qt5::Core Qt5::Widgets Qt5::Gui Qt5::Svg Qt5::Network)
-target_link_libraries(Cutter ${RADARE2_TARGET})
+list(REMOVE_ITEM SOURCE_FILES Main.cpp)
+add_library(CutterLib OBJECT ${UI_FILES} ${QRC_FILES} ${SOURCE_FILES} ${HEADER_FILES} ${BINDINGS_SOURCE})
+target_include_directories(CutterLib PUBLIC . core widgets common plugins)
+target_link_libraries(CutterLib Qt5::Core Qt5::Widgets Qt5::Gui Qt5::Svg Qt5::Network)
+target_link_libraries(CutterLib ${RADARE2_LIBRARIES})
 if(CUTTER_ENABLE_PYTHON)
-    target_link_libraries(Cutter ${PYTHON_LIBRARIES})
+    target_link_libraries(CutterLib ${PYTHON_LIBRARIES})
     if(CUTTER_ENABLE_PYTHON_BINDINGS)
         target_link_libraries(Cutter Shiboken2::libshiboken PySide2::pyside2)
 
@@ -219,6 +220,9 @@ if(TARGET KF5::SyntaxHighlighting)
     target_link_libraries(Cutter KF5::SyntaxHighlighting)
     target_compile_definitions(Cutter PRIVATE CUTTER_ENABLE_KSYNTAXHIGHLIGHTING)
 endif()
+
+add_executable(Cutter Main.cpp)
+target_link_libraries(Cutter CutterLib)
 
 if(CUTTER_ENABLE_TESTS)
     add_subdirectory(test)
