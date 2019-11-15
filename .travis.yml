@@ -155,14 +155,16 @@ script:
                 -DCUTTER_USE_BUNDLED_RADARE2=ON
                 -DCUTTER_ENABLE_TESTS=ON
                 ../src &&
-            make -j4;
+            make -j4 &&
             ./test/CutterTest;
        elif [[ "$BUILD_SYSTEM" == "cmake_nodep" ]]; then
             cmake
                 -DCMAKE_BUILD_TYPE=Release
                 -DCUTTER_USE_BUNDLED_RADARE2=ON
+                -DCUTTER_ENABLE_TESTS=ON
                 ../src &&
-            make -j4;
+            make -j4 &&
+            ./test/CutterTest;
        fi
     elif [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
         if [[ "$BUILD_SYSTEM" == "qmake" ]]; then
@@ -190,7 +192,7 @@ script:
                 -DBREAKPAD_FRAMEWORK_DIR="$BREAKPAD_FRAMEWORK_DIR"
                 -DCUTTER_ENABLE_TESTS=ON
                 ../src &&
-            make -j4;
+            make -j4 &&
             ./test/CutterTest;
        fi
     fi

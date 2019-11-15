@@ -162,6 +162,11 @@ endif()
 
 list(REMOVE_ITEM SOURCE_FILES Main.cpp)
 add_library(CutterLib OBJECT ${UI_FILES} ${QRC_FILES} ${SOURCE_FILES} ${HEADER_FILES} ${BINDINGS_SOURCE})
+add_executable(Cutter MACOSX_BUNDLE Main.cpp)
+set_target_properties(Cutter PROPERTIES
+        ENABLE_EXPORTS ON
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/macos/Info.plist")
+target_link_libraries(Cutter CutterLib)
 
 if (TARGET Graphviz::GVC)
     target_link_libraries(CutterLib Graphviz::GVC)
@@ -177,8 +182,8 @@ if(CUTTER_ENABLE_CRASH_REPORTS)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g ")
     if(DEFINED BREAKPAD_FRAMEWORK_DIR)
         include_directories("${BREAKPAD_FRAMEWORK_DIR}/Breakpad.framework/Headers")
-        set_target_properties(CutterLib PROPERTIES LINK_FLAGS "-Wl,-F${BREAKPAD_FRAMEWORK_DIR}")
-        target_link_libraries(CutterLib "-framework Breakpad")
+        set_target_properties(Cutter PROPERTIES LINK_FLAGS "-Wl,-F${BREAKPAD_FRAMEWORK_DIR}")
+        target_link_libraries(Cutter "-framework Breakpad")
     else()
         find_package(Breakpad REQUIRED)
         include_directories(${BREAKPAD_INCLUDE_DIRS})
@@ -214,12 +219,6 @@ if(TARGET KF5::SyntaxHighlighting)
     target_link_libraries(CutterLib KF5::SyntaxHighlighting)
     target_compile_definitions(CutterLib PRIVATE CUTTER_ENABLE_KSYNTAXHIGHLIGHTING)
 endif()
-
-add_executable(Cutter MACOSX_BUNDLE Main.cpp)
-set_target_properties(Cutter PROPERTIES
-        ENABLE_EXPORTS ON
-        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/macos/Info.plist")
-target_link_libraries(Cutter CutterLib)
 
 if(CUTTER_ENABLE_TESTS)
     add_subdirectory(test)
