@@ -62,7 +62,7 @@ class MainWindow : public QMainWindow
 public:
     bool responsive;
 
-    explicit MainWindow(QWidget *parent = nullptr);
+    explicit MainWindow(QWidget *parent = nullptr, bool testMode = false);
     ~MainWindow() override;
 
     void openNewFile(InitialOptions &options, bool skipOptionsDialog = false);
@@ -203,6 +203,8 @@ private slots:
 
 private:
     CutterCore *core;
+
+    bool testMode;
 
     bool panelLock;
     bool tabsOnTop;

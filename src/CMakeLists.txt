@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.14)
 
 if(POLICY CMP0074)
     cmake_policy(SET CMP0074 NEW)
@@ -154,51 +154,45 @@ if (TARGET Graphviz::GVC)
     list(APPEND HEADER_FILES ${CUTTER_PRO_GRAPHVIZ_HEADERS})
 endif()
 
-
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
         OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     add_definitions(-Wall -Wextra)
     set_source_files_properties(${BINDINGS_SOURCE} PROPERTIES COMPILE_FLAGS -w)
 endif()
 
-
-add_executable(Cutter MACOSX_BUNDLE ${UI_FILES} ${QRC_FILES} ${SOURCE_FILES} ${HEADER_FILES} ${BINDINGS_SOURCE})
-set_target_properties(Cutter PROPERTIES
-        ENABLE_EXPORTS ON
-        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/macos/Info.plist")
+list(REMOVE_ITEM SOURCE_FILES Main.cpp)
+add_library(CutterLib OBJECT ${UI_FILES} ${QRC_FILES} ${SOURCE_FILES} ${HEADER_FILES} ${BINDINGS_SOURCE})
 
 if (TARGET Graphviz::GVC)
-    target_link_libraries(Cutter Graphviz::GVC)
-    target_compile_definitions(Cutter PRIVATE CUTTER_ENABLE_GRAPHVIZ)
+    target_link_libraries(CutterLib Graphviz::GVC)
+    target_compile_definitions(CutterLib PRIVATE CUTTER_ENABLE_GRAPHVIZ)
 endif()
 
 if(CUTTER_ENABLE_CRASH_REPORTS)
     set(THREADS_PREFER_PTHREAD_FLAG ON)
     find_package(Threads REQUIRED)
-    target_link_libraries(Cutter Threads::Threads)
+    target_link_libraries(CutterLib Threads::Threads)
     
     add_definitions(-DCUTTER_ENABLE_CRASH_REPORTS)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g ")
     if(DEFINED BREAKPAD_FRAMEWORK_DIR)
         include_directories("${BREAKPAD_FRAMEWORK_DIR}/Breakpad.framework/Headers")
-        set_target_properties(Cutter PROPERTIES LINK_FLAGS "-Wl,-F${BREAKPAD_FRAMEWORK_DIR}")
-        target_link_libraries(Cutter "-framework Breakpad")
+        set_target_properties(CutterLib PROPERTIES LINK_FLAGS "-Wl,-F${BREAKPAD_FRAMEWORK_DIR}")
+        target_link_libraries(CutterLib "-framework Breakpad")
     else()
         find_package(Breakpad REQUIRED)
         include_directories(${BREAKPAD_INCLUDE_DIRS})
-        target_link_libraries(Cutter ${BREAKPAD_LINK_LIBRARIES})
+        target_link_libraries(CutterLib ${BREAKPAD_LINK_LIBRARIES})
     endif()
 endif()
 
-list(REMOVE_ITEM SOURCE_FILES Main.cpp)
-add_library(CutterLib OBJECT ${UI_FILES} ${QRC_FILES} ${SOURCE_FILES} ${HEADER_FILES} ${BINDINGS_SOURCE})
 target_include_directories(CutterLib PUBLIC . core widgets common plugins)
 target_link_libraries(CutterLib Qt5::Core Qt5::Widgets Qt5::Gui Qt5::Svg Qt5::Network)
-target_link_libraries(CutterLib ${RADARE2_LIBRARIES})
+target_link_libraries(CutterLib ${RADARE2_TARGET})
 if(CUTTER_ENABLE_PYTHON)
     target_link_libraries(CutterLib ${PYTHON_LIBRARIES})
     if(CUTTER_ENABLE_PYTHON_BINDINGS)
-        target_link_libraries(Cutter Shiboken2::libshiboken PySide2::pyside2)
+        target_link_libraries(CutterLib Shiboken2::libshiboken PySide2::pyside2)
 
         get_target_property(BINDINGS_INCLUDE_DIRS Cutter INCLUDE_DIRECTORIES)
         if(APPLE AND _qt5Core_install_prefix)
@@ -217,11 +211,14 @@ if(CUTTER_ENABLE_PYTHON)
 endif()
 
 if(TARGET KF5::SyntaxHighlighting)
-    target_link_libraries(Cutter KF5::SyntaxHighlighting)
-    target_compile_definitions(Cutter PRIVATE CUTTER_ENABLE_KSYNTAXHIGHLIGHTING)
+    target_link_libraries(CutterLib KF5::SyntaxHighlighting)
+    target_compile_definitions(CutterLib PRIVATE CUTTER_ENABLE_KSYNTAXHIGHLIGHTING)
 endif()
 
-add_executable(Cutter Main.cpp)
+add_executable(Cutter MACOSX_BUNDLE Main.cpp)
+set_target_properties(Cutter PROPERTIES
+        ENABLE_EXPORTS ON
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/macos/Info.plist")
 target_link_libraries(Cutter CutterLib)
 
 if(CUTTER_ENABLE_TESTS)

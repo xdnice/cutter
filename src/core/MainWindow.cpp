@@ -109,16 +109,19 @@
 template<class T>
 T* getNewInstance(MainWindow *m, QAction *a) { return new T(m, a); }
 
-MainWindow::MainWindow(QWidget *parent) :
+MainWindow::MainWindow(QWidget *parent, bool testMode) :
     QMainWindow(parent),
     core(Core()),
+    testMode(testMode),
     ui(new Ui::MainWindow)
 {
     panelLock = false;
     tabsOnTop = false;
     configuration = Config();
 
-    initUI();
+    if (!testMode) {
+        initUI();
+    }
 }
 
 MainWindow::~MainWindow()
