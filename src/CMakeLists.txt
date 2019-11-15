@@ -194,7 +194,7 @@ if(CUTTER_ENABLE_PYTHON)
     if(CUTTER_ENABLE_PYTHON_BINDINGS)
         target_link_libraries(CutterLib Shiboken2::libshiboken PySide2::pyside2)
 
-        get_target_property(BINDINGS_INCLUDE_DIRS Cutter INCLUDE_DIRECTORIES)
+        get_target_property(BINDINGS_INCLUDE_DIRS CutterLib INCLUDE_DIRECTORIES)
         if(APPLE AND _qt5Core_install_prefix)
             list(APPEND BINDINGS_INCLUDE_DIRS "${_qt5Core_install_prefix}/include")
             list(APPEND BINDINGS_INCLUDE_DIRS "${_qt5Core_install_prefix}/include/QtCore")

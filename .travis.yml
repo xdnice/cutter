@@ -42,7 +42,6 @@ matrix:
          - libgraphviz-dev
          - qt5-default
          - libqt5svg5-dev
-         - cmake
     before_install:
       - pyenv install 3.5.2
       - pyenv global 3.5.2
@@ -104,14 +103,20 @@ install:
       scripts/fetch_deps.sh;
       source cutter-deps/env.sh;
     fi
+  - CMAKE_VERSION=3.14.7
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
         export PATH=/usr/local/opt/llvm/bin:$PATH;
         source scripts/prepare_breakpad_macos.sh;
+        brew install cmake || brew upgrade cmake;
     fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then 
         export LD_LIBRARY_PATH="`llvm-config --libdir`:$LD_LIBRARY_PATH";
         source scripts/prepare_breakpad_linux.sh;
+        CMAKE_URL="https://cmake.org/files/v${CMAKE_VERSION%.[0-9]}/cmake-${CMAKE_VERSION}-Linux-x86_64.tar.gz";
+        mkdir cmake && travis_retry wget --no-check-certificate -O - ${CMAKE_URL} | tar --strip-components=1 -xz -C cmake;
+        export PATH=$PWD/cmake/bin:${PATH};
     fi
+  - cmake --version
 
 before_script:
   - cd radare2
@@ -148,8 +153,10 @@ script:
                 -DCUTTER_ENABLE_PYTHON_BINDINGS=ON
                 -DCUTTER_ENABLE_CRASH_REPORTS=ON
                 -DCUTTER_USE_BUNDLED_RADARE2=ON
+                -DCUTTER_ENABLE_TESTS=ON
                 ../src &&
             make -j4;
+            ./test/CutterTest;
        elif [[ "$BUILD_SYSTEM" == "cmake_nodep" ]]; then
             cmake
                 -DCMAKE_BUILD_TYPE=Release
@@ -181,8 +188,10 @@ script:
                 -DCUTTER_ENABLE_CRASH_REPORTS=ON
                 -DCUTTER_USE_BUNDLED_RADARE2=ON
                 -DBREAKPAD_FRAMEWORK_DIR="$BREAKPAD_FRAMEWORK_DIR"
+                -DCUTTER_ENABLE_TESTS=ON
                 ../src &&
             make -j4;
+            ./test/CutterTest;
        fi
     fi
 
