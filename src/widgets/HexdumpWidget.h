@@ -13,8 +13,6 @@
 #include "MemoryDockWidget.h"
 #include "common/CutterSeekable.h"
 #include "common/Highlighter.h"
-#include "common/HexAsciiHighlighter.h"
-#include "common/HexHighlighter.h"
 #include "common/SvgIconEngine.h"
 #include "HexWidget.h"
 
@@ -31,7 +29,7 @@ class HexdumpWidget : public MemoryDockWidget
 {
     Q_OBJECT
 public:
-    explicit HexdumpWidget(MainWindow *main, QAction *action = nullptr);
+    explicit HexdumpWidget(MainWindow *main);
     ~HexdumpWidget() override;
     Highlighter *highlighter;
 
@@ -79,6 +77,8 @@ private slots:
     void on_hexSideTab_2_currentChanged(int index);
     void on_copyMD5_clicked();
     void on_copySHA1_clicked();
+    void on_copySHA256_clicked();
+    void on_copyCRC32_clicked();
 };
 
 #endif // HEXDUMPWIDGET_H

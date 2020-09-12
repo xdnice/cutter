@@ -75,11 +75,8 @@ class CommentsWidget : public ListDockWidget
     Q_OBJECT
 
 public:
-    explicit CommentsWidget(MainWindow *main, QAction *action = nullptr);
+    explicit CommentsWidget(MainWindow *main);
     ~CommentsWidget() override;
-
-protected:
-    void resizeEvent(QResizeEvent *event) override;
 
 private slots:
     void onActionHorizontalToggled(bool checked);

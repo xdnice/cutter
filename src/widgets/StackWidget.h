@@ -22,8 +22,7 @@ public:
     struct Item {
         RVA offset;
         QString value;
-        QString description;
-        QVariant descriptionColor;
+        RefDescription refDesc;
     };
 
     enum Column { OffsetColumn = 0, ValueColumn, DescriptionColumn, ColumnCount};
@@ -53,7 +52,7 @@ class StackWidget : public CutterDockWidget
     Q_OBJECT
 
 public:
-    explicit StackWidget(MainWindow *main, QAction *action = nullptr);
+    explicit StackWidget(MainWindow *main);
     ~StackWidget();
 
 private slots:

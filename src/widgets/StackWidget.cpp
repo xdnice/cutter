@@ -8,8 +8,8 @@
 #include "QHeaderView"
 #include "QMenu"
 
-StackWidget::StackWidget(MainWindow *main, QAction *action) :
-    CutterDockWidget(main, action),
+StackWidget::StackWidget(MainWindow *main) :
+    CutterDockWidget(main),
     ui(new Ui::StackWidget),
     menuText(this),
     addressableItemContextMenu(this, main)
@@ -40,9 +40,8 @@ StackWidget::StackWidget(MainWindow *main, QAction *action) :
     connect(Core(), &CutterCore::registersChanged, this, &StackWidget::updateContents);
     connect(Core(), &CutterCore::stackChanged, this, &StackWidget::updateContents);
     connect(Config(), &Configuration::fontsUpdated, this, &StackWidget::fontsUpdatedSlot);
-    connect(viewStack, SIGNAL(doubleClicked(const QModelIndex &)), this,
-            SLOT(onDoubleClicked(const QModelIndex &)));
-    connect(viewStack, SIGNAL(customContextMenuRequested(QPoint)), SLOT(customMenuRequested(QPoint)));
+    connect(viewStack, &QAbstractItemView::doubleClicked, this, &StackWidget::onDoubleClicked);
+    connect(viewStack, &QWidget::customContextMenuRequested, this, &StackWidget::customMenuRequested);
     connect(editAction, &QAction::triggered, this, &StackWidget::editStack);
     connect(viewStack->selectionModel(), &QItemSelectionModel::currentChanged,
             this, &StackWidget::onCurrentChanged);
@@ -146,37 +145,17 @@ StackModel::StackModel(QObject *parent)
 
 void StackModel::reload()
 {
-    QJsonArray stackValues = Core()->getStack().array();
+    QList<QJsonObject> stackItems = Core()->getStack();
 
     beginResetModel();
     values.clear();
-    for (const QJsonValue &value : stackValues) {
-        QJsonObject stackItem = value.toObject();
+    for (const QJsonObject &stackItem : stackItems) {
         Item item;
 
         item.offset = stackItem["addr"].toVariant().toULongLong();
         item.value = RAddressString(stackItem["value"].toVariant().toULongLong());
+        item.refDesc = Core()->formatRefDesc(stackItem["ref"].toObject());
 
-
-        QJsonValue refObject = stackItem["ref"];
-        if (!refObject.isUndefined()) { // check that the key exists
-            QString ref = refObject.toString();
-            if (ref.contains("ascii") && ref.count("-->") == 1) {
-                ref = Core()->cmdj(QString("pszj @ [%1]").arg(item.offset)).object().value("string").toString();
-            }
-            item.description = ref;
-
-
-            if (refObject.toString().contains("ascii") && refObject.toString().count("-->") == 1) {
-                item.descriptionColor = QVariant(QColor(243, 156, 17));
-            } else if (ref.contains("program R X") && ref.count("-->") == 0) {
-                item.descriptionColor = QVariant(QColor(Qt::red));
-            } else if (ref.contains("stack") && ref.count("-->") == 0) {
-                item.descriptionColor = QVariant(QColor(Qt::cyan));
-            } else if (ref.contains("library") && ref.count("-->") == 0) {
-                item.descriptionColor = QVariant(QColor(Qt::green));
-            }
-        }
         values.push_back(item);
     }
     endResetModel();
@@ -207,14 +186,14 @@ QVariant StackModel::data(const QModelIndex &index, int role) const
         case ValueColumn:
             return item.value;
         case DescriptionColumn:
-            return item.description;
+            return item.refDesc.ref;
         default:
             return QVariant();
         }
     case Qt::ForegroundRole:
         switch (index.column()) {
         case DescriptionColumn:
-            return item.descriptionColor;
+            return item.refDesc.refColor;
         default:
             return QVariant();
         }

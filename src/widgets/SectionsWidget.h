@@ -36,7 +36,7 @@ private:
     QList<SectionDescription> *sections;
 
 public:
-    enum Column { NameColumn = 0, SizeColumn, AddressColumn, EndAddressColumn, PermissionsColumn, EntropyColumn, ColumnCount };
+    enum Column { NameColumn = 0, SizeColumn, AddressColumn, EndAddressColumn, VirtualSizeColumn, PermissionsColumn, EntropyColumn, ColumnCount };
     enum Role { SectionDescriptionRole = Qt::UserRole };
 
     SectionsModel(QList<SectionDescription> *sections, QObject *parent = nullptr);
@@ -67,7 +67,7 @@ class SectionsWidget : public ListDockWidget
     Q_OBJECT
 
 public:
-    explicit SectionsWidget(MainWindow *main, QAction *action = nullptr);
+    explicit SectionsWidget(MainWindow *main);
     ~SectionsWidget();
 
 private slots:

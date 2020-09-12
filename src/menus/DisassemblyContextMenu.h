@@ -2,10 +2,13 @@
 #define DISASSEMBLYCONTEXTMENU_H
 
 #include "core/Cutter.h"
+#include "common/IOModesController.h"
 #include <QMenu>
 #include <QKeySequence>
 
-class DisassemblyContextMenu : public QMenu
+class MainWindow;
+
+class CUTTER_EXPORT DisassemblyContextMenu : public QMenu
 {
     Q_OBJECT
 
@@ -28,6 +31,7 @@ public slots:
 
 private slots:
     void aboutToShowSlot();
+    void aboutToHideSlot();
 
     void on_actionEditFunction_triggered();
     void on_actionEditInstruction_triggered();
@@ -35,7 +39,6 @@ private slots:
     void on_actionJmpReverse_triggered();
     void on_actionEditBytes_triggered();
     void showReverseJmpQuery();
-    bool writeFailed();
 
     void on_actionCopy_triggered();
     void on_actionCopyAddr_triggered();
@@ -46,6 +49,7 @@ private slots:
     void on_actionRenameUsedHere_triggered();
     void on_actionSetFunctionVarTypes_triggered();
     void on_actionXRefs_triggered();
+    void on_actionXRefsForVariables_triggered();
     void on_actionDisplayOptions_triggered();
 
     void on_actionDeleteComment_triggered();
@@ -53,6 +57,7 @@ private slots:
     void on_actionDeleteFunction_triggered();
 
     void on_actionAddBreakpoint_triggered();
+    void on_actionAdvancedBreakpoint_triggered();
     void on_actionContinueUntil_triggered();
     void on_actionSetPC_triggered();
 
@@ -84,6 +89,7 @@ private:
     QKeySequence getCopyAddressSequence() const;
     QKeySequence getSetToCodeSequence() const;
     QKeySequence getSetAsStringSequence() const;
+    QKeySequence getSetAsStringAdvanced() const;
     QKeySequence getSetToDataSequence() const;
     QKeySequence getSetToDataExSequence() const;
     QKeySequence getAddFlagSequence() const;
@@ -107,6 +113,7 @@ private:
     bool canCopy;
     QString curHighlightedWord; // The current highlighted word
     MainWindow *mainWindow;
+    IOModesController ioModesController;
 
     QList<QAction *> anonymousActions;
 
@@ -129,6 +136,7 @@ private:
     QAction actionRenameUsedHere;
     QAction actionSetFunctionVarTypes;
     QAction actionXRefs;
+    QAction actionXRefsForVariables;
     QAction actionDisplayOptions;
 
     QAction actionDeleteComment;
@@ -156,8 +164,11 @@ private:
 
     QMenu *debugMenu;
     QAction actionContinueUntil;
-    QAction actionAddBreakpoint;
     QAction actionSetPC;
+
+    QMenu *breakpointMenu;
+    QAction actionAddBreakpoint;
+    QAction actionAdvancedBreakpoint;
 
     QAction actionSetToCode;
 
@@ -176,6 +187,8 @@ private:
 
     QAction showInSubmenu;
     QList<QAction*> showTargetMenuActions;
+    QMenu *pluginMenu = nullptr;
+    QAction *pluginActionMenuAction = nullptr;
 
     // For creating anonymous entries (that are always visible)
     QAction *addAnonymousAction(QString name, const char *slot, QKeySequence shortcut);
@@ -193,8 +206,16 @@ private:
     void addSetAsMenu();
     void addSetToDataMenu();
     void addEditMenu();
+    void addBreakpointMenu();
     void addDebugMenu();
 
+    /**
+     * @brief Checks if the currently highlighted word in the disassembly widget
+     * is a local variable or function paramter.
+     * @return Return true if the highlighted word is the name of a local variable or function parameter,
+     * return false otherwise.
+     */
+    bool isHighlightedWordLocalVar();
     struct ThingUsedHere {
         QString name;
         RVA offset;

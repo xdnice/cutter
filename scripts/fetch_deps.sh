@@ -4,16 +4,16 @@ cd $(dirname "${BASH_SOURCE[0]}")/..
 mkdir -p cutter-deps && cd cutter-deps
 
 LINUX_FILE="cutter-deps-linux.tar.gz"
-LINUX_MD5=0d20ec9217bed56098b78e9031b544ab
-LINUX_URL=https://github.com/radareorg/cutter-deps/releases/download/v8/cutter-deps-linux.tar.gz
+LINUX_MD5=31fd19443a3405d6b6097cbbd4c11fba
+LINUX_URL=https://github.com/radareorg/cutter-deps/releases/download/v12/cutter-deps-linux.tar.gz
 
 MACOS_FILE="cutter-deps-macos.tar.gz"
-MACOS_MD5=2763c59a9917a0f7c88995d4b77ec209
-MACOS_URL=https://github.com/radareorg/cutter-deps/releases/download/v8/cutter-deps-macos.tar.gz
+MACOS_MD5=e75041c04fc806437723a399028402af
+MACOS_URL=https://github.com/radareorg/cutter-deps/releases/download/v12/cutter-deps-macos.tar.gz
 
 WIN_FILE="cutter-deps-win.tar.gz"
-WIN_MD5=20b3ab878c5f38e5d746774dd2f7e803
-WIN_URL=https://github.com/radareorg/cutter-deps/releases/download/v9/cutter-deps-win.tar.gz
+WIN_MD5=7c755404140f2e9945bfc13d2e645bb1
+WIN_URL=https://github.com/radareorg/cutter-deps/releases/download/v12/cutter-deps-win.tar.gz
 
 if [ "$OS" == "Windows_NT" ]; then
 	FILE="${WIN_FILE}"

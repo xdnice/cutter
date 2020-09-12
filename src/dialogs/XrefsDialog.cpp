@@ -8,7 +8,7 @@
 
 #include <QJsonArray>
 
-XrefsDialog::XrefsDialog(MainWindow *main, QWidget *parent) :
+XrefsDialog::XrefsDialog(MainWindow *main, QWidget *parent, bool hideXrefFrom) :
     QDialog(parent),
     addr(0),
     toModel(this),
@@ -25,7 +25,7 @@ XrefsDialog::XrefsDialog(MainWindow *main, QWidget *parent) :
     ui->fromTreeWidget->setModel(&fromModel);
 
     // Modify the splitter's location to show more Disassembly instead of empty space. Not possible via Designer
-    ui->splitter->setSizes(QList<int>() << 100 << 200);
+    ui->splitter->setSizes(QList<int>() << 300 << 400);
 
     // Increase asm text edit margin
     QTextDocument *asm_docu = ui->previewTextEdit->document();
@@ -35,9 +35,9 @@ XrefsDialog::XrefsDialog(MainWindow *main, QWidget *parent) :
     setupPreviewFont();
 
     // Highlight current line
-    connect(ui->previewTextEdit, SIGNAL(cursorPositionChanged()), this, SLOT(highlightCurrentLine()));
-    connect(Config(), SIGNAL(fontsUpdated()), this, SLOT(setupPreviewFont()));
-    connect(Config(), SIGNAL(colorsUpdated()), this, SLOT(setupPreviewColors()));
+    connect(ui->previewTextEdit, &QPlainTextEdit::cursorPositionChanged, this, &XrefsDialog::highlightCurrentLine);
+    connect(Config(), &Configuration::fontsUpdated, this, &XrefsDialog::setupPreviewFont);
+    connect(Config(), &Configuration::colorsUpdated, this, &XrefsDialog::setupPreviewColors);
 
     connect(ui->toTreeWidget->selectionModel(), &QItemSelectionModel::selectionChanged,
             this, &XrefsDialog::onToTreeWidgetItemSelectionChanged);
@@ -52,6 +52,10 @@ XrefsDialog::XrefsDialog(MainWindow *main, QWidget *parent) :
 
     connect(ui->toTreeWidget, &QAbstractItemView::doubleClicked, this, &QWidget::close);
     connect(ui->fromTreeWidget, &QAbstractItemView::doubleClicked, this, &QWidget::close);
+
+    if (hideXrefFrom) {
+        hideXrefFromSection();
+    }
 }
 
 XrefsDialog::~XrefsDialog() { }
@@ -123,6 +127,7 @@ void XrefsDialog::updatePreview(RVA addr)
     tempConfig.set("asm.lines", false);
     tempConfig.set("asm.bytes", false);
 
+    // Use cmd because cmRaw cannot handle the output properly. Why?
     QString disas = Core()->cmd("pd--20 @ " + QString::number(addr));
     ui->previewTextEdit->document()->setHtml(disas);
 
@@ -133,22 +138,52 @@ void XrefsDialog::updatePreview(RVA addr)
 
 void XrefsDialog::updateLabels(QString name)
 {
-    ui->label_xTo->setText(tr("X-Refs to %1:").arg(name));
-    ui->label_xFrom->setText(tr("X-Refs from %1:").arg(name));
+    ui->label_xTo->setText(tr("X-Refs to %1 (%2 results):").arg(name).arg(toModel.rowCount()));
+    ui->label_xFrom->setText(tr("X-Refs from %1 (%2 results):").arg(name).arg(fromModel.rowCount()));
+}
+
+void XrefsDialog::updateLabelsForVariables(QString name)
+{
+    ui->label_xTo->setText(tr("Writes to %1").arg(name));
+    ui->label_xFrom->setText(tr("Reads from %1").arg(name));
+}
+
+void XrefsDialog::hideXrefFromSection()
+{
+    ui->label_xFrom->hide();
+    ui->fromTreeWidget->hide();
 }
 
 void XrefsDialog::fillRefsForAddress(RVA addr, QString name, bool whole_function)
 {
-    TempConfig tempConfig;
-    tempConfig.set("scr.html", false);
-    tempConfig.set("scr.color", COLOR_MODE_DISABLED);
-
     setWindowTitle(tr("X-Refs for %1").arg(name));
-    updateLabels(name);
 
     toModel.readForOffset(addr, true, whole_function);
     fromModel.readForOffset(addr, false, whole_function);
 
+    updateLabels(name);
+
+    // Adjust columns to content
+    qhelpers::adjustColumns(ui->fromTreeWidget, fromModel.columnCount(), 0);
+    qhelpers::adjustColumns(ui->toTreeWidget, toModel.columnCount(), 0);
+
+    // Automatically select the first line
+    if (!qhelpers::selectFirstItem(ui->toTreeWidget)) {
+        qhelpers::selectFirstItem(ui->fromTreeWidget);
+    }
+}
+
+void XrefsDialog::fillRefsForVariable(QString nameOfVariable, RVA offset)
+{
+    setWindowTitle(tr("X-Refs for %1").arg(nameOfVariable));
+    updateLabelsForVariables(nameOfVariable);
+
+    // Initialize Model
+    toModel.readForVariable(nameOfVariable, true, offset);
+    fromModel.readForVariable(nameOfVariable, false, offset);
+    // Hide irrelevant column 1: which shows type
+    ui->fromTreeWidget->hideColumn(XrefModel::Columns::TYPE);
+    ui->toTreeWidget->hideColumn(XrefModel::Columns::TYPE);
     // Adjust columns to content
     qhelpers::adjustColumns(ui->fromTreeWidget, fromModel.columnCount(), 0);
     qhelpers::adjustColumns(ui->toTreeWidget, toModel.columnCount(), 0);
@@ -187,6 +222,14 @@ void XrefModel::readForOffset(RVA offset, bool to, bool whole_function)
     endResetModel();
 }
 
+void XrefModel::readForVariable(QString nameOfVariable, bool write, RVA offset)
+{
+    beginResetModel();
+    this->to = write;
+    xrefs = Core()->getXRefsForVariable(nameOfVariable, write, offset);
+    endResetModel();
+}
+
 int XrefModel::rowCount(const QModelIndex &parent) const
 {
     Q_UNUSED(parent)
@@ -212,20 +255,20 @@ QVariant XrefModel::data(const QModelIndex &index, int role) const
         switch (index.column()) {
         case OFFSET:
             return to ? xref.from_str : xref.to_str;
+        case TYPE:
+            return xrefTypeString(xref.type);
         case CODE:
             if (to || xref.type != "DATA") {
                 return Core()->disassembleSingleInstruction(xref.from);
             } else {
                 return QString();
             }
-        case TYPE:
-            return xrefTypeString(xref.type);
         }
         return QVariant();
     case FlagDescriptionRole:
         return QVariant::fromValue(xref);
     default:
-        return QVariant();
+        break;
     }
     return QVariant();
 }
@@ -239,10 +282,10 @@ QVariant XrefModel::headerData(int section, Qt::Orientation orientation, int rol
         switch (section) {
         case OFFSET:
             return tr("Address");
-        case CODE:
-            return tr("Code");
         case TYPE:
             return tr("Type");
+        case CODE:
+            return tr("Code");
         default:
             return QVariant();
         }

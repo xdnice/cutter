@@ -3,13 +3,13 @@
 #include "dialogs/EditInstructionDialog.h"
 #include "dialogs/CommentsDialog.h"
 #include "dialogs/FlagDialog.h"
-#include "dialogs/RenameDialog.h"
 #include "dialogs/XrefsDialog.h"
 #include "dialogs/EditVariablesDialog.h"
 #include "dialogs/SetToDataDialog.h"
 #include "dialogs/EditFunctionDialog.h"
 #include "dialogs/LinkTypeDialog.h"
 #include "dialogs/EditStringDialog.h"
+#include "dialogs/BreakpointsDialog.h"
 #include "MainWindow.h"
 
 #include <QtCore>
@@ -18,6 +18,7 @@
 #include <QClipboard>
 #include <QApplication>
 #include <QPushButton>
+#include <QInputDialog>
 
 DisassemblyContextMenu::DisassemblyContextMenu(QWidget *parent, MainWindow *mainWindow)
     :   QMenu(parent),
@@ -38,6 +39,7 @@ DisassemblyContextMenu::DisassemblyContextMenu(QWidget *parent, MainWindow *main
         actionRenameUsedHere(this),
         actionSetFunctionVarTypes(this),
         actionXRefs(this),
+        actionXRefsForVariables(this),
         actionDisplayOptions(this),
         actionDeleteComment(this),
         actionDeleteFlag(this),
@@ -55,8 +57,9 @@ DisassemblyContextMenu::DisassemblyContextMenu(QWidget *parent, MainWindow *main
         actionSetBits32(this),
         actionSetBits64(this),
         actionContinueUntil(this),
-        actionAddBreakpoint(this),
         actionSetPC(this),
+        actionAddBreakpoint(this),
+        actionAdvancedBreakpoint(this),
         actionSetToCode(this),
         actionSetAsStringAuto(this),
         actionSetAsStringRemove(this),
@@ -100,7 +103,7 @@ DisassemblyContextMenu::DisassemblyContextMenu(QWidget *parent, MainWindow *main
                SLOT(on_actionRenameUsedHere_triggered()), getRenameUsedHereSequence());
     addAction(&actionRenameUsedHere);
 
-    initAction(&actionSetFunctionVarTypes, tr("Re-type function local vars"),
+    initAction(&actionSetFunctionVarTypes, tr("Re-type Local Variables"),
                SLOT(on_actionSetFunctionVarTypes_triggered()), getRetypeSequence());
     addAction(&actionSetFunctionVarTypes);
 
@@ -125,8 +128,8 @@ DisassemblyContextMenu::DisassemblyContextMenu(QWidget *parent, MainWindow *main
     addSetBitsMenu();
 
     structureOffsetMenu = addMenu(tr("Structure offset"));
-    connect(structureOffsetMenu, SIGNAL(triggered(QAction*)),
-            this, SLOT(on_actionStructureOffsetMenu_triggered(QAction*)));
+    connect(structureOffsetMenu, &QMenu::triggered,
+            this, &DisassemblyContextMenu::on_actionStructureOffsetMenu_triggered);
 
     initAction(&actionLinkType, tr("Link Type to Address"),
                SLOT(on_actionLinkType_triggered()), getLinkTypeSequence());
@@ -140,6 +143,10 @@ DisassemblyContextMenu::DisassemblyContextMenu(QWidget *parent, MainWindow *main
                SLOT(on_actionXRefs_triggered()), getXRefSequence());
     addAction(&actionXRefs);
 
+    initAction(&actionXRefsForVariables, tr("X-Refs for local variables"),
+                SLOT(on_actionXRefsForVariables_triggered()), QKeySequence({Qt::SHIFT + Qt::Key_X}));
+    addAction(&actionXRefsForVariables);
+
     initAction(&actionDisplayOptions, tr("Show Options"),
                SLOT(on_actionDisplayOptions_triggered()), getDisplayOptionsSequence());
 
@@ -149,10 +156,22 @@ DisassemblyContextMenu::DisassemblyContextMenu(QWidget *parent, MainWindow *main
 
     addSeparator();
 
+    addBreakpointMenu();
     addDebugMenu();
+
+    addSeparator();
+
+    if (mainWindow) {
+        pluginMenu = mainWindow->getContextMenuExtensions(MainWindow::ContextMenuType::Disassembly);
+        pluginActionMenuAction = addMenu(pluginMenu);
+    }
+
+    addSeparator();
 
     connect(this, &DisassemblyContextMenu::aboutToShow,
             this, &DisassemblyContextMenu::aboutToShowSlot);
+    connect(this, &DisassemblyContextMenu::aboutToHide,
+            this, &DisassemblyContextMenu::aboutToHideSlot);
 }
 
 DisassemblyContextMenu::~DisassemblyContextMenu()
@@ -228,8 +247,8 @@ void DisassemblyContextMenu::addSetAsMenu()
                SLOT(on_actionSetAsString_triggered()), getSetAsStringSequence());
     initAction(&actionSetAsStringRemove, tr("Remove"),
                SLOT(on_actionSetAsStringRemove_triggered()));
-    initAction(&actionSetAsStringAdvanced, tr("Adanced"),
-               SLOT(on_actionSetAsStringAdvanced_triggered()));
+    initAction(&actionSetAsStringAdvanced, tr("Advanced"),
+               SLOT(on_actionSetAsStringAdvanced_triggered()), getSetAsStringAdvanced());
 
 
     setAsString->addAction(&actionSetAsStringAuto);
@@ -285,13 +304,21 @@ void DisassemblyContextMenu::addEditMenu()
     editMenu->addAction(&actionJmpReverse);
 }
 
-void DisassemblyContextMenu::addDebugMenu()
+void DisassemblyContextMenu::addBreakpointMenu()
 {
-    debugMenu = addMenu(tr("Debug"));
+    breakpointMenu = addMenu(tr("Breakpoint"));
 
     initAction(&actionAddBreakpoint, tr("Add/remove breakpoint"),
                SLOT(on_actionAddBreakpoint_triggered()), getAddBPSequence());
-    debugMenu->addAction(&actionAddBreakpoint);
+    breakpointMenu->addAction(&actionAddBreakpoint);
+    initAction(&actionAdvancedBreakpoint, tr("Advanced breakpoint"),
+               SLOT(on_actionAdvancedBreakpoint_triggered()), QKeySequence(Qt::CTRL+Qt::Key_F2));
+    breakpointMenu->addAction(&actionAdvancedBreakpoint);
+}
+
+void DisassemblyContextMenu::addDebugMenu()
+{
+    debugMenu = addMenu(tr("Debug"));
 
     initAction(&actionContinueUntil, tr("Continue until line"),
                SLOT(on_actionContinueUntil_triggered()));
@@ -309,7 +336,15 @@ QVector<DisassemblyContextMenu::ThingUsedHere> DisassemblyContextMenu::getThingU
     for (const auto &thing : array) {
         auto obj = thing.toObject();
         RVA offset = obj["offset"].toVariant().toULongLong();
-        QString name = obj["name"].toString();
+        QString name;
+
+        // If real names display is enabled, show flag's real name instead of full flag name
+        if (Config()->getConfigBool("asm.flags.real") && obj.contains("realname")) {
+            name = obj["realname"].toString();
+        } else {
+            name = obj["name"].toString();
+        }
+
         QString typeString = obj["type"].toString();
         ThingUsedHere::Type type = ThingUsedHere::Type::Address;
         if (typeString == "var") {
@@ -431,7 +466,12 @@ void DisassemblyContextMenu::aboutToShowSlot()
 
     actionAnalyzeFunction.setVisible(true);
 
-    QString comment = Core()->cmd("CC." + RAddressString(offset));
+    // Show the option to remove a defined string only if a string is defined in this address
+    QString stringDefinition = Core()->cmdRawAt("Cs.", offset);
+    actionSetAsStringRemove.setVisible(!stringDefinition.isEmpty());
+
+    QString comment = Core()->cmdRawAt("CC.", offset);
+
     if (comment.isNull() || comment.isEmpty()) {
         actionDeleteComment.setVisible(false);
         actionAddComment.setText(tr("Add Comment"));
@@ -445,8 +485,8 @@ void DisassemblyContextMenu::aboutToShowSlot()
 
 
     RCore *core = Core()->core();
-    RAnalFunction *fcn = r_anal_get_fcn_at (core->anal, offset, R_ANAL_FCN_TYPE_NULL);
-    RAnalFunction *in_fcn = Core()->functionAt(offset);
+    RAnalFunction *fcn = Core()->functionAt(offset);
+    RAnalFunction *in_fcn = Core()->functionIn(offset);
     RFlagItem *f = r_flag_get_i (core->flags, offset);
 
     actionDeleteFlag.setVisible(f ? true : false);
@@ -457,8 +497,17 @@ void DisassemblyContextMenu::aboutToShowSlot()
         actionRename.setVisible(true);
         actionRename.setText(tr("Rename function \"%1\"").arg(fcn->name));
     } else if (f) {
+        QString name;
+
+        // Check if Realname is enabled. If yes, show it instead of the full flag-name.
+        if (Config()->getConfigBool("asm.flags.real") && f->realname) {
+            name = f->realname;
+        } else {
+            name = f->name;
+        }
+
         actionRename.setVisible(true);
-        actionRename.setText(tr("Rename flag \"%1\"").arg(f->name));
+        actionRename.setText(tr("Rename flag \"%1\"").arg(name));
     } else {
         actionRename.setVisible(false);
     }
@@ -503,9 +552,31 @@ void DisassemblyContextMenu::aboutToShowSlot()
 
     // Only show debug options if we are currently debugging
     debugMenu->menuAction()->setVisible(Core()->currentlyDebugging);
+    bool hasBreakpoint = Core()->breakpointIndexAt(offset) > -1;
+    actionAddBreakpoint.setText(hasBreakpoint ?
+                                     tr("Remove breakpoint") : tr("Add breakpoint"));
+    actionAdvancedBreakpoint.setText(hasBreakpoint ?
+                                     tr("Edit breakpoint") : tr("Advanced breakpoint"));
     QString progCounterName = Core()->getRegisterName("PC").toUpper();
     actionSetPC.setText("Set " + progCounterName + " here");
 
+    if (pluginMenu) {
+        pluginActionMenuAction->setVisible(!pluginMenu->isEmpty());
+        for (QAction *pluginAction : pluginMenu->actions()) {
+            pluginAction->setData(QVariant::fromValue(offset));
+        }
+    }
+
+    bool isLocalVar = isHighlightedWordLocalVar();
+    actionXRefsForVariables.setVisible(isLocalVar);
+    if (isLocalVar) {
+        actionXRefsForVariables.setText(tr("X-Refs for %1").arg(curHighlightedWord));
+    }
+}
+
+void DisassemblyContextMenu::aboutToHideSlot()
+{
+    actionXRefsForVariables.setVisible(true);
 }
 
 QKeySequence DisassemblyContextMenu::getCopySequence() const
@@ -533,6 +604,10 @@ QKeySequence DisassemblyContextMenu::getSetAsStringSequence() const
     return {Qt::Key_A};
 }
 
+QKeySequence DisassemblyContextMenu::getSetAsStringAdvanced() const
+{
+	return {Qt::SHIFT + Qt::Key_A};
+}
 
 QKeySequence DisassemblyContextMenu::getSetToDataSequence() const
 {
@@ -602,6 +677,9 @@ QKeySequence DisassemblyContextMenu::getUndefineFunctionSequence() const
 
 void DisassemblyContextMenu::on_actionEditInstruction_triggered()
 {
+    if (!ioModesController.prepareForWriting()) {
+        return;
+    }
     EditInstructionDialog e(EDIT_TEXT, this);
     e.setWindowTitle(tr("Edit Instruction at %1").arg(RAddressString(offset)));
 
@@ -614,30 +692,16 @@ void DisassemblyContextMenu::on_actionEditInstruction_triggered()
         QString userInstructionOpcode = e.getInstruction();
         if (userInstructionOpcode != oldInstructionOpcode) {
             Core()->editInstruction(offset, userInstructionOpcode);
-
-            // Check if the write failed
-            auto newInstructionBytes = Core()->getInstructionBytes(offset);
-            if (newInstructionBytes == oldInstructionBytes) {
-                if (!writeFailed()) {
-                    Core()->editInstruction(offset, userInstructionOpcode);
-                }
-            }
         }
     }
 }
 
 void DisassemblyContextMenu::on_actionNopInstruction_triggered()
 {
-    QString oldBytes = Core()->getInstructionBytes(offset);
-
-    Core()->nopInstruction(offset);
-
-    QString newBytes = Core()->getInstructionBytes(offset);
-    if (oldBytes == newBytes) {
-        if (!writeFailed()) {
-            Core()->nopInstruction(offset);
-        }
+    if (!ioModesController.prepareForWriting()) {
+        return;
     }
+    Core()->nopInstruction(offset);
 }
 
 void DisassemblyContextMenu::showReverseJmpQuery()
@@ -659,20 +723,17 @@ void DisassemblyContextMenu::showReverseJmpQuery()
 
 void DisassemblyContextMenu::on_actionJmpReverse_triggered()
 {
-    QString oldBytes = Core()->getInstructionBytes(offset);
-
-    Core()->jmpReverse(offset);
-
-    QString newBytes = Core()->getInstructionBytes(offset);
-    if (oldBytes == newBytes) {
-        if (!writeFailed()) {
-            Core()->jmpReverse(offset);
-        }
+    if (!ioModesController.prepareForWriting()) {
+        return;
     }
+    Core()->jmpReverse(offset);
 }
 
 void DisassemblyContextMenu::on_actionEditBytes_triggered()
 {
+    if (!ioModesController.prepareForWriting()) {
+        return;
+    }
     EditInstructionDialog e(EDIT_BYTES, this);
     e.setWindowTitle(tr("Edit Bytes at %1").arg(RAddressString(offset)));
 
@@ -683,36 +744,8 @@ void DisassemblyContextMenu::on_actionEditBytes_triggered()
         QString bytes = e.getInstruction();
         if (bytes != oldBytes) {
             Core()->editBytes(offset, bytes);
-
-            QString newBytes = Core()->getInstructionBytes(offset);
-            if (oldBytes == newBytes) {
-                if (!writeFailed()) {
-                    Core()->editBytes(offset, bytes);
-                }
-            }
         }
     }
-}
-
-bool DisassemblyContextMenu::writeFailed()
-{
-    QMessageBox msgBox;
-    msgBox.setIcon(QMessageBox::Icon::Critical);
-    msgBox.setWindowTitle(tr("Write error"));
-    msgBox.setText(
-        tr("Unable to complete write operation. Consider opening in write mode. \n\nWARNING: In write mode any changes will be commited to disk"));
-    msgBox.addButton(tr("OK"), QMessageBox::NoRole);
-    QAbstractButton *reopenButton = msgBox.addButton(tr("Reopen in write mode and try again"),
-                                                     QMessageBox::YesRole);
-
-    msgBox.exec();
-
-    if (msgBox.clickedButton() == reopenButton) {
-        Core()->cmd("oo+");
-        return false;
-    }
-
-    return true;
 }
 
 void DisassemblyContextMenu::on_actionCopy_triggered()
@@ -729,6 +762,16 @@ void DisassemblyContextMenu::on_actionCopyAddr_triggered()
 void DisassemblyContextMenu::on_actionAddBreakpoint_triggered()
 {
     Core()->toggleBreakpoint(offset);
+}
+
+void DisassemblyContextMenu::on_actionAdvancedBreakpoint_triggered()
+{
+    int index = Core()->breakpointIndexAt(offset);
+    if (index >= 0) {
+        BreakpointsDialog::editBreakpoint(Core()->getBreakpointAt(offset), this);
+    } else {
+        BreakpointsDialog::createNewBreakpoint(offset, this);
+    }
 }
 
 void DisassemblyContextMenu::on_actionContinueUntil_triggered()
@@ -749,12 +792,14 @@ void DisassemblyContextMenu::on_actionAddComment_triggered()
 
 void DisassemblyContextMenu::on_actionAnalyzeFunction_triggered()
 {
-    RenameDialog dialog(mainWindow);
-    dialog.setWindowTitle(tr("Analyze function at %1").arg(RAddressString(offset)));
-    dialog.setPlaceholderText(tr("Function name"));
-    if (dialog.exec()) {
-        QString function_name = dialog.getName();
-        Core()->createFunctionAt(offset, function_name);
+    bool ok;
+    // Create dialog
+    QString functionName = QInputDialog::getText(this, tr("New function %1").arg(RAddressString(offset)),
+                            tr("Function name:"), QLineEdit::Normal, QString(), &ok);
+
+    // If user accepted
+    if (ok && !functionName.isEmpty()) {
+        Core()->createFunctionAt(offset, functionName);
     }
 }
 
@@ -767,84 +812,82 @@ void DisassemblyContextMenu::on_actionAddFlag_triggered()
 void DisassemblyContextMenu::on_actionRename_triggered()
 {
     RCore *core = Core()->core();
+    bool ok;
+    
+    RAnalFunction *fcn = Core()->functionIn(offset);
+    RFlagItem *f = r_flag_get_i(core->flags, offset);
 
-    RenameDialog dialog(mainWindow);
-
-    RAnalFunction *fcn = r_anal_get_fcn_at (core->anal, offset, R_ANAL_FCN_TYPE_NULL);
-    RFlagItem *f = r_flag_get_i (core->flags, offset);
     if (fcn) {
-        /* Rename function */
-        dialog.setWindowTitle(tr("Rename function %1").arg(fcn->name));
-        dialog.setName(fcn->name);
-        if (dialog.exec()) {
-            QString new_name = dialog.getName();
-            Core()->renameFunction(fcn->name, new_name);
+        // Renaming a function
+        QString newName = QInputDialog::getText(this->mainWindow, tr("Rename function %2").arg(fcn->name),
+                                            tr("Function name:"), QLineEdit::Normal, fcn->name, &ok);
+        if (ok && !newName.isEmpty()) {
+            Core()->renameFunction(fcn->addr, newName);
         }
     } else if (f) {
-        /* Rename current flag */
-        dialog.setWindowTitle(tr("Rename flag %1").arg(f->name));
-        dialog.setName(f->name);
-        if (dialog.exec()) {
-            QString new_name = dialog.getName();
-            Core()->renameFlag(f->name, new_name);
+        // Renaming flag
+        QString newName = QInputDialog::getText(this, tr("Rename flag %2").arg(f->name),
+                                            tr("Flag name:"), QLineEdit::Normal, f->name, &ok);
+        if (ok && !newName.isEmpty()) {
+            Core()->renameFlag(f->name, newName);
         }
-    } else {
-        return;
     }
 }
 
 void DisassemblyContextMenu::on_actionRenameUsedHere_triggered()
 {
+
+    QString title;
+    QString inputValue;
+    QString oldName;
+
     auto array = getThingUsedHere(offset);
     if (array.isEmpty()) {
         return;
     }
 
     auto thingUsedHere = array.first();
-
-    RenameDialog dialog(mainWindow);
-
-    QString oldName;
     auto type = thingUsedHere.type;
 
     if (type == ThingUsedHere::Type::Address) {
         RVA offset = thingUsedHere.offset;
-        dialog.setWindowTitle(tr("Add flag at %1").arg(RAddressString(offset)));
-        dialog.setName("label." + QString::number(offset, 16));
+        title = tr("Add flag at %1").arg(RAddressString(offset));
+        inputValue = "label." + QString::number(offset, 16);
     } else {
         oldName = thingUsedHere.name;
-        dialog.setWindowTitle(tr("Rename %1").arg(oldName));
-        dialog.setName(oldName);
+        title = tr("Rename %1").arg(oldName);
+        inputValue = oldName;
     }
 
+    bool ok;
+    // Create dialog
+    QString newName = QInputDialog::getText(this, title,
+                            tr("Name:"), QLineEdit::Normal, inputValue, &ok);
 
-    if (dialog.exec()) {
-        QString newName = dialog.getName().trimmed();
-        if (!newName.isEmpty()) {
-            Core()->cmd("an " + newName + " @ " + QString::number(offset));
-
-            if (type == ThingUsedHere::Type::Address || type == ThingUsedHere::Type::Flag) {
-                Core()->triggerFlagsChanged();
-            } else if (type == ThingUsedHere::Type::Var) {
-                Core()->triggerVarsChanged();
-            } else if (type == ThingUsedHere::Type::Function) {
-                Core()->triggerFunctionRenamed(oldName, newName);
-            }
+    // If user accepted
+    if (ok && !newName.isEmpty()) {
+        Core()->cmdRawAt(QString("an %1").arg(newName), offset);
+        if (type == ThingUsedHere::Type::Address || type == ThingUsedHere::Type::Flag) {
+            Core()->triggerFlagsChanged();
+        } else if (type == ThingUsedHere::Type::Var) {
+            Core()->triggerVarsChanged();
+        } else if (type == ThingUsedHere::Type::Function) {
+            Core()->triggerFunctionRenamed(thingUsedHere.offset, newName);
         }
     }
 }
 
 void DisassemblyContextMenu::on_actionSetFunctionVarTypes_triggered()
 {
-    RAnalFunction *fcn = Core()->functionAt(offset);
+    RAnalFunction *fcn = Core()->functionIn(offset);
 
     if (!fcn) {
-        QMessageBox::critical(this, tr("Re-type function local vars"),
+        QMessageBox::critical(this, tr("Re-type Local Variables"),
                               tr("You must be in a function to define variable types."));
         return;
     }
 
-    EditVariablesDialog dialog(Core()->getOffset(), curHighlightedWord, this);
+    EditVariablesDialog dialog(fcn->addr, curHighlightedWord, this);
     if (dialog.empty()) { // don't show the dialog if there are no variables
         return;
     }
@@ -856,6 +899,15 @@ void DisassemblyContextMenu::on_actionXRefs_triggered()
     XrefsDialog dialog(mainWindow, nullptr);
     dialog.fillRefsForAddress(offset, RAddressString(offset), false);
     dialog.exec();
+}
+
+void DisassemblyContextMenu::on_actionXRefsForVariables_triggered()
+{
+    if (isHighlightedWordLocalVar()) {
+        XrefsDialog dialog(mainWindow, nullptr);
+        dialog.fillRefsForVariable(curHighlightedWord, offset);
+        dialog.exec();
+    }
 }
 
 void DisassemblyContextMenu::on_actionDisplayOptions_triggered()
@@ -982,14 +1034,9 @@ void DisassemblyContextMenu::on_actionEditFunction_triggered()
         QString startAddrText = "0x" + QString::number(fcn->addr, 16);
         dialog.setStartAddrText(startAddrText);
 
-        QString endAddrText = "0x" + QString::number(fcn->addr + fcn->_size, 16);
-        dialog.setEndAddrText(endAddrText);
+        dialog.setStackSizeText(QString::number(fcn->stack));
 
-        QString stackSizeText;
-        stackSizeText.sprintf("%d", fcn->stack);
-        dialog.setStackSizeText(stackSizeText);
-
-        QStringList callConList = Core()->cmd("afcl").split("\n");
+        QStringList callConList = Core()->cmdRaw("afcl").split("\n");
         callConList.removeLast();
         dialog.setCallConList(callConList);
         dialog.setCallConSelected(fcn->cc);
@@ -997,14 +1044,12 @@ void DisassemblyContextMenu::on_actionEditFunction_triggered()
 
         if (dialog.exec()) {
             QString new_name = dialog.getNameText();
-            Core()->renameFunction(fcn->name, new_name);
+            Core()->renameFunction(fcn->addr, new_name);
             QString new_start_addr = dialog.getStartAddrText();
             fcn->addr = Core()->math(new_start_addr);
-            QString new_end_addr = dialog.getEndAddrText();
-            Core()->cmd("afu " + new_end_addr);
             QString new_stack_size = dialog.getStackSizeText();
             fcn->stack = int(Core()->math(new_stack_size));
-            Core()->cmd("afc " + dialog.getCallConSelected());
+            Core()->cmdRaw("afc " + dialog.getCallConSelected());
             emit Core()->functionsChanged();
         }
     }
@@ -1065,4 +1110,15 @@ void DisassemblyContextMenu::initAction(QAction *action, QString name,
     }
     action->setShortcuts(keySequenceList);
     action->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+}
+
+bool DisassemblyContextMenu::isHighlightedWordLocalVar()
+{
+    QList<VariableDescription> variables = Core()->getVariables(offset);
+    for (const VariableDescription &var : variables) {
+        if (var.name == curHighlightedWord) {
+            return true;
+        }
+    }
+    return false;
 }

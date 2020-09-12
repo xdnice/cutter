@@ -5,7 +5,9 @@
 #include <QMenu>
 #include <QKeySequence>
 
-class AddressableItemContextMenu : public QMenu
+class MainWindow;
+
+class CUTTER_EXPORT AddressableItemContextMenu : public QMenu
 {
     Q_OBJECT
 
@@ -31,16 +33,18 @@ private:
 
     virtual void aboutToShowSlot();
 
+    QMenu *pluginMenu;
+    QAction *pluginMenuAction;
     MainWindow *mainWindow;
 
     RVA offset;
     bool hasTarget = false;
 protected:
     void setHasTarget(bool hasTarget);
-    QAction actionShowInMenu;
-    QAction actionCopyAddress;
-    QAction actionShowXrefs;
-    QAction actionAddcomment;
+    QAction *actionShowInMenu;
+    QAction *actionCopyAddress;
+    QAction *actionShowXrefs;
+    QAction *actionAddcomment;
 
     QString name;
     bool wholeFunction = false;

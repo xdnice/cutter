@@ -46,7 +46,7 @@ private:
     QString analysisDescription(int level);
     QString shellcode;
     int analLevel;
-    QStringList asm_plugins;
+    QList<RAsmPluginDescription> asmPlugins;
 
 
     void updateCPUComboBox();
@@ -64,6 +64,14 @@ private:
     InitialOptions::Endianness getSelectedEndianness() const;
     QString getSelectedOS() const;
     QList<CommandDescription> getSelectedAdvancedAnalCmds() const;
+
+    /**
+     * @brief setTooltipWithConfigHelp is an helper function that add a tolltip to a widget with
+     * a description of a given radare2 eval config.
+     * @param w - a widget to which to add the tooltip
+     * @param config - name of a configuration variable such as "asm.bits".
+     */
+    void setTooltipWithConfigHelp(QWidget *w, const char *config);
 
 public:
     void loadOptions(const InitialOptions &options);

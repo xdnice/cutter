@@ -18,6 +18,7 @@ namespace KSyntaxHighlighting {
 class QSyntaxHighlighter;
 class QTextDocument;
 
+
 enum ColorFlags {
     LightFlag = 1,
     DarkFlag = 2,
@@ -29,7 +30,7 @@ struct CutterInterfaceTheme {
 };
 
 
-class Configuration : public QObject
+class CUTTER_EXPORT Configuration : public QObject
 {
     Q_OBJECT
 private:
@@ -40,7 +41,9 @@ private:
 #ifdef CUTTER_ENABLE_KSYNTAXHIGHLIGHTING
     KSyntaxHighlighting::Repository *kSyntaxHighlightingRepository;
 #endif
+    bool outputRedirectEnabled = true;
 
+    Configuration();
     // Colors
     void loadBaseThemeNative();
     void loadBaseThemeDark();
@@ -58,7 +61,6 @@ public:
     static const QHash<QString, QHash<ColorFlags, QColor>> cutterOptionColors;
 
     // Functions
-    Configuration();
     static Configuration *instance();
 
     void loadInitial();
@@ -127,18 +129,13 @@ public:
     // Asm Options
     void resetToDefaultAsmOptions();
 
-    // Graph
-    int getGraphBlockMaxChars() const
-    {
-        return s.value("graph.maxcols", 100).toInt();
-    }
-    void setGraphBlockMaxChars(int ch)
-    {
-        s.setValue("graph.maxcols", ch);
-    }
-
     QString getColorTheme() const     { return s.value("theme", "cutter").toString(); }
     void setColorTheme(const QString &theme);
+    /**
+     * @brief Change current color theme if it doesnt't much native theme's darkness.
+     */
+    void adjustColorThemeDarkness();
+    int colorThemeDarkness(const QString &colorTheme) const;
 
     void setColor(const QString &name, const QColor &color);
     const QColor getColor(const QString &name) const;
@@ -158,12 +155,6 @@ public:
     bool isFirstExecution();
     
     /**
-     * @brief Get list of available translation directories (depends on configuration and OS)
-     * @return list of directories
-     */
-    QStringList getTranslationsDirectories() const;
-
-    /**
      * @return id of the last selected decompiler (see CutterCore::getDecompilerById)
      */
     QString getSelectedDecompiler();
@@ -172,6 +163,41 @@ public:
     bool getDecompilerAutoRefreshEnabled();
     void setDecompilerAutoRefreshEnabled(bool enabled);
 
+    void enableDecompilerAnnotationHighlighter(bool useDecompilerHighlighter);
+    bool isDecompilerAnnotationHighlighterEnabled();
+
+    // Graph
+    int getGraphBlockMaxChars() const
+    {
+        return s.value("graph.maxcols", 100).toInt();
+    }
+    void setGraphBlockMaxChars(int ch)
+    {
+        s.setValue("graph.maxcols", ch);
+    }
+
+    /**
+     * @brief Getters and setters for the transaparent option state and scale factor for bitmap graph exports.
+     */
+    bool getBitmapTransparentState();
+    double getBitmapExportScaleFactor();
+    void setBitmapTransparentState(bool inputValueGraph);
+    void setBitmapExportScaleFactor(double inputValueGraph);
+    void setGraphSpacing(QPoint blockSpacing, QPoint edgeSpacing);
+    QPoint getGraphBlockSpacing();
+    QPoint getGraphEdgeSpacing();
+
+    /**
+     * @brief Enable or disable Cutter output redirection.
+     * Output redirection state can only be changed early during Cutter initalization.
+     * Changing it later will have no effect
+     * @param enabled set this to false for disabling output redirection
+     */
+    void setOutputRedirectionEnabled(bool enabled);
+    bool getOutputRedirectionEnabled() const;
+
+public slots:
+    void refreshFont();
 signals:
     void fontsUpdated();
     void colorsUpdated();

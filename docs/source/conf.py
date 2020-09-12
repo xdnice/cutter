@@ -20,13 +20,13 @@
 # -- Project information -----------------------------------------------------
 
 project = 'Cutter'
-copyright = '2019, The Cutter Developers'
+copyright = '2020, The Cutter Developers'
 author = 'The Cutter Developers'
 
 # The short X.Y version
-version = '1.10'
-# The full version, including alpha/beta/rc tags
-release = '1.10.0'
+version = '1.12'
+# The full version, including a2lpha/beta/rc tags
+release = '1.12.0'
 
 
 # -- General configuration ---------------------------------------------------
@@ -40,6 +40,8 @@ release = '1.10.0'
 # ones.
 extensions = [
     'breathe',
+    'recommonmark',
+    'sphinx.ext.autosectionlabel'
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -49,7 +51,10 @@ templates_path = ['_templates']
 # You can specify multiple suffix as a list of string:
 #
 # source_suffix = '.rst'
-source_suffix = ['.rst', '.md']
+source_suffix = {
+    '.rst': 'restructuredtext',
+    '.md': 'markdown',
+}
 
 # The master toctree document.
 master_doc = 'index'
@@ -68,6 +73,10 @@ exclude_patterns = ['_build']
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = 'rainbow_dash'
+
+
+autosectionlabel_prefix_document = True
+autosectionlabel_maxdepth = 2
 
 # -- Options for Breathe -----------------------------------------------------
 
@@ -95,6 +104,15 @@ html_logo = '../../src/img/cutter.ico'
 # so a file named "default.css" will overwrite the builtin "default.css".
 # html_static_path = ['static']
 
+html_js_files = [
+    'cutter.js',
+]
+
+html_css_files = [
+    'cutter.css',
+    'admonitions.css'
+]
+
 # Custom sidebar templates, must be a dictionary that maps document names
 # to template names.
 #
@@ -105,7 +123,7 @@ html_logo = '../../src/img/cutter.ico'
 #   'using/windows': ['windowssidebar.html', 'searchbox.html'],
 # }
 html_sidebars = {
-   '**': ['globaltoc.html'],
+   '**': ['globaltoc.html', 'searchbox.html'],
 }
 
 # -- Options for HTMLHelp output ---------------------------------------------

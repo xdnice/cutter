@@ -5,7 +5,6 @@
 #include <QFontDatabase>
 #include <QFile>
 #include <QApplication>
-#include <QLibraryInfo>
 
 #ifdef CUTTER_ENABLE_KSYNTAXHIGHLIGHTING
 #include <KSyntaxHighlighting/repository.h>
@@ -15,6 +14,7 @@
 
 #include "common/ColorThemeWorker.h"
 #include "common/SyntaxHighlighter.h"
+#include "common/ResourcePaths.h"
 
 /* Map with names of themes associated with its color palette
  * (Dark or Light), so for dark interface themes will be shown only Dark color themes
@@ -33,6 +33,9 @@ const QHash<QString, ColorFlags> Configuration::relevantThemes = {
     { "tango", LightFlag },
     { "white", LightFlag }
 };
+static const QString DEFAULT_LIGHT_COLOR_THEME = "cutter";
+static const QString DEFAULT_DARK_COLOR_THEME = "ayu";
+
 
 const QHash<QString, QHash<ColorFlags, QColor>> Configuration::cutterOptionColors = {
     { "gui.cflow",                 { { DarkFlag,  QColor(0xff, 0xff, 0xff) },
@@ -106,12 +109,13 @@ static const QHash<QString, QVariant> asmOptions = {
     { "asm.lines.fcn",      true },
     { "asm.flags.offset",   false },
     { "asm.emu",            false },
+    { "emu.str",            false},
     { "asm.cmt.right",      true },
     { "asm.cmt.col",        35 },
     { "asm.var.summary",    false },
     { "asm.bytes",          false },
     { "asm.size",           false },
-    { "asm.bytespace",      false },
+    { "asm.bytes.space",    false },
     { "asm.lbytes",         true },
     { "asm.nbytes",         10 },
     { "asm.syntax",         "intel" },
@@ -119,11 +123,14 @@ static const QHash<QString, QVariant> asmOptions = {
     { "asm.bb.line",        false },
     { "asm.capitalize",     false },
     { "asm.var.sub",        true },
-    { "asm.var.subonly",    true },
+    { "asm.sub.varonly",    true },
     { "asm.tabs",           8 },
     { "asm.tabs.off",       5 },
     { "asm.marks",          false },
     { "asm.refptr",         false },
+    { "asm.flags.real",     true },
+    { "asm.reloff",         false },
+    { "asm.reloff.flags",   false },
     { "esil.breakoninvalid",true },
     { "graph.offset",       false}
 };
@@ -207,7 +214,10 @@ int Configuration::getNewFileLastClicked()
 
 void Configuration::resetAll()
 {
-    Core()->cmd("e-");
+    // Don't reset all r2 vars, that currently breaks a bunch of stuff.
+    // settingsFile.remove()+loadInitials() should reset all settings configurable using Cutter GUI.
+    //Core()->cmdRaw("e-");
+
     Core()->setSettings();
     // Delete the file so no extra configuration is in it.
     QFile settingsFile(s.fileName());
@@ -392,6 +402,11 @@ void Configuration::setFont(const QFont &font)
     emit fontsUpdated();
 }
 
+void Configuration::refreshFont()
+{
+    emit fontsUpdated();
+}
+
 qreal Configuration::getZoomFactor() const {
   qreal fontZoom = s.value("zoomFactor", 1.0).value<qreal>();
   return qMax(fontZoom, 0.1);
@@ -433,6 +448,8 @@ void Configuration::setInterfaceTheme(int theme)
     for (auto it = cutterOptionColors.cbegin(); it != cutterOptionColors.cend(); it++) {
         setColor(it.key(), it.value()[interfaceTheme.flag]);
     }
+
+    adjustColorThemeDarkness();
 
     emit interfaceThemeChanged();
     emit colorsUpdated();
@@ -518,10 +535,10 @@ const QColor Configuration::getColor(const QString &name) const
 void Configuration::setColorTheme(const QString &theme)
 {
     if (theme == "default") {
-        Core()->cmd("ecd");
+        Core()->cmdRaw("ecd");
         s.setValue("theme", "default");
     } else {
-        Core()->cmd(QStringLiteral("eco %1").arg(theme));
+        Core()->cmdRaw(QStringLiteral("eco %1").arg(theme));
         s.setValue("theme", theme);
     }
 
@@ -535,6 +552,26 @@ void Configuration::setColorTheme(const QString &theme)
     }
 
     emit colorsUpdated();
+}
+
+void Configuration::adjustColorThemeDarkness()
+{
+    bool windowIsDark = windowColorIsDark();
+    int windowDarkness = windowIsDark ? DarkFlag : LightFlag;
+    int currentColorThemeDarkness = colorThemeDarkness(getColorTheme());
+
+    if ((currentColorThemeDarkness & windowDarkness) == 0) {
+        setColorTheme(windowIsDark ? DEFAULT_DARK_COLOR_THEME : DEFAULT_LIGHT_COLOR_THEME);
+    }
+}
+
+int Configuration::colorThemeDarkness(const QString &colorTheme) const
+{
+    auto flags = relevantThemes.find(colorTheme);
+    if (flags != relevantThemes.end()) {
+        return static_cast<int>(*flags);
+    }
+    return DarkFlag | LightFlag;
 }
 
 void Configuration::resetToDefaultAsmOptions()
@@ -615,7 +652,7 @@ void Configuration::setConfig(const QString &key, const QVariant &value)
  */
 QStringList Configuration::getAvailableTranslations()
 {
-    const auto &trDirs = getTranslationsDirectories();
+    const auto &trDirs = Cutter::getTranslationsDirectories();
 
     QSet<QString> fileNamesSet;
     for (const auto &trDir : trDirs) {
@@ -630,7 +667,7 @@ QStringList Configuration::getAvailableTranslations()
         }
     }
 
-    QStringList fileNames = fileNamesSet.toList();
+    QStringList fileNames = fileNamesSet.values();
     std::sort(fileNames.begin(), fileNames.end());
     QStringList languages;
     QString currLanguageName;
@@ -667,21 +704,6 @@ bool Configuration::isFirstExecution()
     }
 }
 
-QStringList Configuration::getTranslationsDirectories() const
-{
-    static const QString cutterTranslationPath = QCoreApplication::applicationDirPath() +
-                                                 QDir::separator()
-                                                 + QLatin1String("translations");
-
-    return {
-        cutterTranslationPath,
-        QLibraryInfo::location(QLibraryInfo::TranslationsPath),
-#ifdef Q_OS_MAC
-        QStringLiteral("%1/../Resources/translations").arg(QCoreApplication::applicationDirPath()),
-#endif // Q_OS_MAC
-    };
-}
-
 QString Configuration::getSelectedDecompiler()
 {
     return s.value("selectedDecompiler").toString();
@@ -700,4 +722,61 @@ bool Configuration::getDecompilerAutoRefreshEnabled()
 void Configuration::setDecompilerAutoRefreshEnabled(bool enabled)
 {
     s.setValue("decompilerAutoRefresh", enabled);
+}
+
+void Configuration::enableDecompilerAnnotationHighlighter(bool useDecompilerHighlighter)
+{
+    s.setValue("decompilerAnnotationHighlighter", useDecompilerHighlighter);
+    emit colorsUpdated();
+}
+
+bool Configuration::isDecompilerAnnotationHighlighterEnabled()
+{
+    return s.value("decompilerAnnotationHighlighter", true).value<bool>();
+}
+
+bool Configuration::getBitmapTransparentState()
+{
+    return s.value("bitmapGraphExportTransparency", false).value<bool>();
+}
+
+double Configuration::getBitmapExportScaleFactor()
+{
+    return s.value("bitmapGraphExportScale", 1.0).value<double>();
+}
+
+void Configuration::setBitmapTransparentState(bool inputValueGraph)
+{
+    s.setValue("bitmapGraphExportTransparency", inputValueGraph);
+}
+
+void Configuration::setBitmapExportScaleFactor(double inputValueGraph)
+{
+    s.setValue("bitmapGraphExportScale", inputValueGraph);
+}
+
+void Configuration::setGraphSpacing(QPoint blockSpacing, QPoint edgeSpacing)
+{
+    s.setValue("graph.blockSpacing", blockSpacing);
+    s.setValue("graph.edgeSpacing", edgeSpacing);
+}
+
+QPoint Configuration::getGraphBlockSpacing()
+{
+    return s.value("graph.blockSpacing", QPoint(20, 40)).value<QPoint>();
+}
+
+QPoint Configuration::getGraphEdgeSpacing()
+{
+    return s.value("graph.edgeSpacing", QPoint(10, 10)).value<QPoint>();
+}
+
+void Configuration::setOutputRedirectionEnabled(bool enabled)
+{
+    this->outputRedirectEnabled = enabled;
+}
+
+bool Configuration::getOutputRedirectionEnabled() const
+{
+    return outputRedirectEnabled;
 }

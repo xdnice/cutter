@@ -4,8 +4,8 @@
 #include "WidgetShortcuts.h"
 #include <QVBoxLayout>
 
-GraphWidget::GraphWidget(MainWindow *main, QAction *action) :
-    MemoryDockWidget(MemoryWidgetType::Graph, main, action)
+GraphWidget::GraphWidget(MainWindow *main) :
+    MemoryDockWidget(MemoryWidgetType::Graph, main)
 {
     setObjectName(main
                   ? main->getUniqueObjectName(getWidgetType())
@@ -90,7 +90,7 @@ QString GraphWidget::getWidgetType()
 
 void GraphWidget::prepareHeader()
 {
-    QString afcf = Core()->cmd(QString("afcf @%1").arg(seekable->getOffset())).trimmed();
+    QString afcf = Core()->cmdRawAt("afcf", seekable->getOffset()).trimmed();
     if (afcf.isEmpty()) {
         header->hide();
         return;

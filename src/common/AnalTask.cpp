@@ -21,14 +21,23 @@ void AnalTask::interrupt()
     r_cons_singleton()->context->breaked = true;
 }
 
+QString AnalTask::getTitle() {
+    // If no file is loaded we consider it's Initial Analysis
+    QJsonArray openedFiles = Core()->getOpenedFiles();
+    if (!openedFiles.size()) {
+        return tr("Initial Analysis");
+    }
+    return tr("Analyzing Program");
+}
+
 void AnalTask::runTask()
 {
-    log(tr("Loading the file..."));
-    openFailed = false;
-
     int perms = R_PERM_RX;
-    if (options.writeEnabled)
+    if (options.writeEnabled) {
         perms |= R_PERM_W;
+        emit Core()->ioModeChanged();
+
+    }
 
     // Demangle (must be before file Core()->loadFile)
     Core()->setConfig("bin.demangle", options.demangle);
@@ -36,6 +45,8 @@ void AnalTask::runTask()
     // Do not reload the file if already loaded
     QJsonArray openedFiles = Core()->getOpenedFiles();
     if (!openedFiles.size() && options.filename.length()) {
+        log(tr("Loading the file..."));
+        openFailed = false;
         bool fileLoaded = Core()->loadFile(options.filename,
                                            options.binLoadAddr,
                                            options.mapAddr,
@@ -60,7 +71,7 @@ void AnalTask::runTask()
     }
 
     if (!options.os.isNull()) {
-        Core()->cmd("e asm.os=" + options.os);
+        Core()->cmdRaw("e asm.os=" + options.os);
     }
 
     if (!options.pdbFile.isNull()) {
@@ -74,14 +85,14 @@ void AnalTask::runTask()
 
     if (!options.shellcode.isNull() && options.shellcode.size() / 2 > 0) {
         log(tr("Loading shellcode..."));
-        Core()->cmd("wx " + options.shellcode);
+        Core()->cmdRaw("wx " + options.shellcode);
     }
 
     if (options.endian != InitialOptions::Endianness::Auto) {
         Core()->setEndianness(options.endian == InitialOptions::Endianness::Big);
     }
 
-    Core()->cmd("fs *");
+    Core()->cmdRaw("fs *");
 
     if (!options.script.isNull()) {
         log(tr("Executing script..."));
@@ -102,6 +113,7 @@ void AnalTask::runTask()
                 return;
             }
             log(cmd.description);
+            // use cmd instead of cmdRaw because commands can be unexpected
             Core()->cmd(cmd.command);
         }
         log(tr("Analysis complete!"));

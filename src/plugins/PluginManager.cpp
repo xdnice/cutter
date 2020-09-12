@@ -10,11 +10,13 @@
 #include "PluginManager.h"
 #include "CutterPlugin.h"
 #include "CutterConfig.h"
+#include "common/Helpers.h"
 
 #include <QDir>
 #include <QCoreApplication>
 #include <QPluginLoader>
 #include <QStandardPaths>
+#include <QDebug>
 
 Q_GLOBAL_STATIC(PluginManager, uniqueInstance)
 
@@ -31,9 +33,14 @@ PluginManager::~PluginManager()
 {
 }
 
-void PluginManager::loadPlugins()
+void PluginManager::loadPlugins(bool enablePlugins)
 {
-    assert(plugins.isEmpty());
+    assert(plugins.empty());
+
+    if (!enablePlugins) {
+        // [#2159] list but don't enable the plugins
+        return;
+    }
 
     QString userPluginDir = getUserPluginsDirectory();
     if (!userPluginDir.isEmpty()) {
@@ -51,7 +58,7 @@ void PluginManager::loadPlugins()
 void PluginManager::loadPluginsFromDir(const QDir &pluginsDir, bool writable)
 {
     qInfo() << "Plugins are loaded from" << pluginsDir.absolutePath();
-    int loadedPlugins = plugins.length();
+    int loadedPlugins = plugins.size();
     if (!pluginsDir.exists()) {
         return;
     }
@@ -74,16 +81,19 @@ void PluginManager::loadPluginsFromDir(const QDir &pluginsDir, bool writable)
     }
 #endif
 
-    loadedPlugins = plugins.length() - loadedPlugins;
+    loadedPlugins = plugins.size() - loadedPlugins;
     qInfo() << "Loaded" << loadedPlugins << "plugin(s).";
+}
+
+void PluginManager::PluginTerminator::operator()(CutterPlugin *plugin) const
+{
+    plugin->terminate();
+    delete plugin;
 }
 
 void PluginManager::destroyPlugins()
 {
-    for (CutterPlugin *plugin : plugins) {
-        plugin->terminate();
-        delete plugin;
-    }
+    plugins.clear();
 }
 
 QVector<QDir> PluginManager::getPluginDirectories() const
@@ -110,7 +120,7 @@ QVector<QDir> PluginManager::getPluginDirectories() const
     QChar listSeparator = QDir::listSeparator();
 #endif
     QString extra_plugin_dirs = CUTTER_EXTRA_PLUGIN_DIRS;
-    for (auto& path : extra_plugin_dirs.split(listSeparator, QString::SplitBehavior::SkipEmptyParts)) {
+    for (auto& path : extra_plugin_dirs.split(listSeparator, CUTTER_QT_SKIP_EMPTY_PARTS)) {
         result.push_back(QDir(path));
     }
 
@@ -144,12 +154,12 @@ void PluginManager::loadNativePlugins(const QDir &directory)
             }
             continue;
         }
-        CutterPlugin *cutterPlugin = qobject_cast<CutterPlugin *>(plugin);
+        PluginPtr cutterPlugin{qobject_cast<CutterPlugin *>(plugin)};
         if (!cutterPlugin) {
             continue;
         }
         cutterPlugin->setupPlugin();
-        plugins.append(cutterPlugin);
+        plugins.push_back(std::move(cutterPlugin));
     }
 }
 
@@ -169,12 +179,12 @@ void PluginManager::loadPythonPlugins(const QDir &directory)
         } else {
             moduleName = fileName;
         }
-        CutterPlugin *cutterPlugin = loadPythonPlugin(moduleName.toLocal8Bit().constData());
+        PluginPtr cutterPlugin{loadPythonPlugin(moduleName.toLocal8Bit().constData())};
         if (!cutterPlugin) {
             continue;
         }
         cutterPlugin->setupPlugin();
-        plugins.append(cutterPlugin);
+        plugins.push_back(std::move(cutterPlugin));
     }
 
     PythonManager::ThreadHolder threadHolder;

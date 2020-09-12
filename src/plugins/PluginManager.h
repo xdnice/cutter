@@ -4,8 +4,10 @@
 
 #include <QObject>
 #include <QDir>
+#include <memory>
+#include <vector>
 
-class CutterPlugin;
+#include "plugins/CutterPlugin.h"
 
 class PluginManager: public QObject
 {
@@ -14,26 +16,34 @@ Q_OBJECT
 public:
     static PluginManager *getInstance();
 
+    class PluginTerminator
+    {
+    public:
+        void operator()(CutterPlugin*) const;
+    };
+    using PluginPtr = std::unique_ptr<CutterPlugin, PluginTerminator>;
+
     PluginManager();
     ~PluginManager();
 
     /**
      * @brief Load all plugins, should be called once on application start
+     * @param enablePlugins set to false if plugin code shouldn't be started
      */
-    void loadPlugins();
+    void loadPlugins(bool enablePlugins = true);
 
     /**
      * @brief Destroy all loaded plugins, should be called once on application shutdown
      */
     void destroyPlugins();
 
-    const QList<CutterPlugin *> &getPlugins()   { return plugins; }
+    const std::vector<PluginPtr> &getPlugins()   { return plugins; }
 
     QVector<QDir> getPluginDirectories() const;
     QString getUserPluginsDirectory() const;
 
 private:
-    QList<CutterPlugin *> plugins;
+    std::vector<PluginPtr> plugins;
 
     void loadNativePlugins(const QDir &directory);
     void loadPluginsFromDir(const QDir &pluginsDir, bool writable = false);
